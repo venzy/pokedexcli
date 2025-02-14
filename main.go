@@ -4,13 +4,12 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/venzy/pokedexcli/internal/commands"
-	"github.com/venzy/pokedexcli/internal/common"
 	"os"
 	"strings"
 )
 
 func main() {
-	config := common.CliCommandConfig{}
+	config := commands.CliCommandConfig{}
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
 		fmt.Print("Pokedex > ")
@@ -21,6 +20,10 @@ func main() {
 		tokens := cleanInput(text)
 		if len(tokens) == 0 {
 			continue
+		} else if len(tokens) > 1 {
+			config.Arguments = tokens[1:]
+		} else {
+			config.Arguments = make([]string, 0)
 		}
 		command := tokens[0]
 		commandEntry, ok := (*commands.GetRegistry())[command]

@@ -2,16 +2,21 @@ package commands
 
 import (
 	"fmt"
-	"github.com/venzy/pokedexcli/internal/common"
 	"github.com/venzy/pokedexcli/internal/pokeapi"
 	"os"
 	"sync"
 )
 
+type CliCommandConfig struct {
+	Arguments []string
+	Previous *string
+	Next *string
+}
+
 type CliCommand struct {
 	Name string
 	Description string
-	Callback func(config *common.CliCommandConfig) error
+	Callback func(config *CliCommandConfig) error
 }
 
 type Registry map[string]CliCommand
@@ -41,18 +46,23 @@ func GetRegistry() *Registry {
 				Description: "Displays previous 20 map locations",
 				Callback: commandMapBack,
 			},
+			"explore": {
+				Name: "explore",
+				Description: "Returns a list of all Pokémon in a given location",
+				Callback: commandExplore,
+			},
 		}
 	})
 	return registryInstance
 }
 
-func commandExit(config *common.CliCommandConfig) error {
+func commandExit(config *CliCommandConfig) error {
 	fmt.Println("Closing the Pokedex... Goodbye!")
 	os.Exit(0)
 	return nil
 }
 
-func commandHelp(config *common.CliCommandConfig) error {
+func commandHelp(config *CliCommandConfig) error {
 	fmt.Println("Welcome to the Pokedex!")
 	fmt.Println("Usage:")
 	fmt.Println()
@@ -62,22 +72,30 @@ func commandHelp(config *common.CliCommandConfig) error {
 	return nil
 }
 
-func commandMapNext(config *common.CliCommandConfig) error {
-	var url string
+func commandMapNext(config *CliCommandConfig) error {
 	if config.Next == nil {
-		if config.Previous == nil {
-			url = pokeapi.BaseURL + "/location-area"
-		} else {
+		if config.Previous != nil {
 			fmt.Println("You're on the last page")
 			return nil
 		}
-	} else {
-		url = *config.Next
 	}
-	return pokeapi.GetLocationAreas(url, config)
+
+	data, err := pokeapi.GetLocationAreas(config.Next)
+	if err != nil {
+		return err
+	}
+
+	config.Previous = data.Previous
+	config.Next = data.Next
+
+	for _, result := range data.Results {
+		fmt.Println(result.Name)
+	}
+
+	return nil
 }
 
-func commandMapBack(config *common.CliCommandConfig) error {
+func commandMapBack(config *CliCommandConfig) error {
 	if config.Previous == nil {
 		if config.Next == nil {
 			fmt.Println("Must use 'map' command at least once before 'mapb'")
@@ -86,5 +104,37 @@ func commandMapBack(config *common.CliCommandConfig) error {
 		}
 		return nil
 	}
-	return pokeapi.GetLocationAreas(*config.Previous, config)
+
+	data, err := pokeapi.GetLocationAreas(config.Previous)
+	if err != nil {
+		return err
+	}
+
+	config.Previous = data.Previous
+	config.Next = data.Next
+
+	for _, result := range data.Results {
+		fmt.Println(result.Name)
+	}
+
+	return nil
+}
+
+func commandExplore(config *CliCommandConfig) error {
+	if len(config.Arguments) != 1 {
+		return fmt.Errorf("explore command expects 1 argument, the area name")
+	}
+	areaName := config.Arguments[0]
+
+	detail, err := pokeapi.GetLocationAreaDetail(areaName)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Exploring %s...\n", areaName)
+	for _, encounter := range detail.PokemonEncounters {
+		fmt.Printf(" - %s\n", encounter.Pokemon.Name)
+	}
+
+	return nil
 }
