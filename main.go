@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 )
 
 func main() {
-	registerCommands()
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
 		fmt.Print("Pokedex > ")
@@ -21,7 +21,7 @@ func main() {
 			continue
 		}
 		command := tokens[0]
-		commandEntry, ok := commandRegistry[command]
+		commandEntry, ok := (*getCommandRegistry())[command]
 		if !ok {
 			fmt.Println("Unknown command")
 			continue
@@ -50,20 +50,26 @@ type cliCommand struct {
 	callback func() error
 }
 
-var commandRegistry map[string]cliCommand
-func registerCommands() {
-	commandRegistry = map[string]cliCommand {
-		"exit": {
-			name: "exit",
-			description: "Exit the Pokedex",
-			callback: commandExit,
-		},
-		"help": {
-			name: "help",
-			description: "Displays a help message",
-			callback: commandHelp,
-		},
-	}
+type commandRegistry map[string]cliCommand
+var commandRegistryInstance *commandRegistry
+var commandRegistryOnce sync.Once
+
+func getCommandRegistry() *commandRegistry {
+	commandRegistryOnce.Do(func() {
+		commandRegistryInstance = &commandRegistry{
+			"exit": {
+				name: "exit",
+				description: "Exit the Pokedex",
+				callback: commandExit,
+			},
+			"help": {
+				name: "help",
+				description: "Displays a help message",
+				callback: commandHelp,
+			},
+		}
+	})
+	return commandRegistryInstance
 }
 
 func commandExit() error {
@@ -76,7 +82,7 @@ func commandHelp() error {
 	fmt.Println("Welcome to the Pokedex!")
 	fmt.Println("Usage:")
 	fmt.Println()
-	for _, command := range commandRegistry {
+	for _, command := range *getCommandRegistry() {
 		fmt.Printf("%s: %s\n", command.name, command.description)
 	}
 	return nil
