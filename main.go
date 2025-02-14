@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	config := commands.CliCommandConfig{}
+	config := commands.NewConfig()
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
 		fmt.Print("Pokedex > ")
@@ -22,8 +22,6 @@ func main() {
 			continue
 		} else if len(tokens) > 1 {
 			config.Arguments = tokens[1:]
-		} else {
-			config.Arguments = make([]string, 0)
 		}
 		command := tokens[0]
 		commandEntry, ok := (*commands.GetRegistry())[command]
@@ -31,7 +29,7 @@ func main() {
 			fmt.Println("Unknown command")
 			continue
 		}
-		err := commandEntry.Callback(&config)
+		err := commandEntry.Callback(config)
 		if err != nil {
 			fmt.Println(err)
 		}

@@ -3,14 +3,25 @@ package commands
 import (
 	"fmt"
 	"github.com/venzy/pokedexcli/internal/pokeapi"
+	"math/rand"
 	"os"
 	"sync"
 )
+
+const debug = true
 
 type CliCommandConfig struct {
 	Arguments []string
 	Previous *string
 	Next *string
+	Caught map[string]*pokeapi.PokemonDetail
+}
+
+func NewConfig() *CliCommandConfig {
+	config := CliCommandConfig{}
+	config.Arguments = []string{}
+	config.Caught = map[string]*pokeapi.PokemonDetail{}
+	return &config
 }
 
 type CliCommand struct {
@@ -50,6 +61,11 @@ func GetRegistry() *Registry {
 				Name: "explore",
 				Description: "Returns a list of all Pokémon in a given location",
 				Callback: commandExplore,
+			},
+			"catch": {
+				Name: "catch",
+				Description: "Attempt to catch a given Pokémon",
+				Callback: commandCatch,
 			},
 		}
 	})
@@ -134,6 +150,45 @@ func commandExplore(config *CliCommandConfig) error {
 	fmt.Printf("Exploring %s...\n", areaName)
 	for _, encounter := range detail.PokemonEncounters {
 		fmt.Printf(" - %s\n", encounter.Pokemon.Name)
+	}
+
+	return nil
+}
+
+func commandCatch(config *CliCommandConfig) error {
+	if len(config.Arguments) != 1 {
+		return fmt.Errorf("catch command expects 1 argument, the Pokémon name")
+	}
+	pokemonName := config.Arguments[0]
+
+	if _, ok := config.Caught[pokemonName]; ok {
+		fmt.Printf("%s already caught!\n", pokemonName)
+		return nil
+	}
+
+	detail, err := pokeapi.GetPokemonDetail(pokemonName)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Throwing a Pokeball at %s...\n", pokemonName)
+
+	// Generate a random 'user experience level' in the range 50 - 608
+	// Minimum Pokemon exp is probably 20 but we guarantee a minimum level of 50
+	const minExp = 50
+	const maxExp = 608
+	expToCatch := rand.Intn(maxExp - minExp + 1) + minExp
+	if debug {
+		fmt.Printf("DEBUG: base exp: %v, expToCatch: %v\n", detail.BaseExperience, expToCatch)
+	}
+	if detail.BaseExperience <= expToCatch {
+		// Caught
+		fmt.Printf("%s was caught!\n", pokemonName)
+
+		config.Caught[pokemonName] = detail
+	} else {
+		// Escaped
+		fmt.Printf("%s escaped!\n", pokemonName)
 	}
 
 	return nil
