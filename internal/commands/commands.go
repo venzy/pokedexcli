@@ -3,12 +3,13 @@ package commands
 import (
 	"fmt"
 	"github.com/venzy/pokedexcli/internal/pokeapi"
+	"math"
 	"math/rand"
 	"os"
 	"sync"
 )
 
-const debug = true
+const debug = false
 
 type CliCommandConfig struct {
 	Arguments []string
@@ -173,15 +174,23 @@ func commandCatch(config *CliCommandConfig) error {
 
 	fmt.Printf("Throwing a Pokeball at %s...\n", pokemonName)
 
-	// Generate a random 'user experience level' in the range 50 - 608
-	// Minimum Pokemon exp is probably 20 but we guarantee a minimum level of 50
-	const minExp = 50
+	// This is the range we expect Pokemon base experience to fall within
+	const minExp = 20
 	const maxExp = 608
-	expToCatch := rand.Intn(maxExp - minExp + 1) + minExp
+
+	// This is Boots' suggested algorithm, inverting the Pokemon's experience on a normalised scale
+	scaledDifficulty := 1.0 - (float64(detail.BaseExperience - minExp) / float64(maxExp - minExp))
+
+	// Minimum chance to catch of 20%
+	catchChance := math.Max(0.2, scaledDifficulty)
+
+	// Roll for Pokemon to escape
+	roll := rand.Float64()
+
 	if debug {
-		fmt.Printf("DEBUG: base exp: %v, expToCatch: %v\n", detail.BaseExperience, expToCatch)
+		fmt.Printf("DEBUG: escape roll: %v, catchChance: %v\n", roll, catchChance)
 	}
-	if detail.BaseExperience <= expToCatch {
+	if roll <= catchChance {
 		// Caught
 		fmt.Printf("%s was caught!\n", pokemonName)
 
