@@ -11,24 +11,24 @@ import (
 
 const debug = false
 
-type CliCommandConfig struct {
+type CliCommandContext struct {
 	Arguments []string
 	Previous *string
 	Next *string
 	Caught map[string]*pokeapi.PokemonDetail
 }
 
-func NewConfig() *CliCommandConfig {
-	config := CliCommandConfig{}
-	config.Arguments = []string{}
-	config.Caught = map[string]*pokeapi.PokemonDetail{}
-	return &config
+func NewContext() *CliCommandContext {
+	context := CliCommandContext{}
+	context.Arguments = []string{}
+	context.Caught = map[string]*pokeapi.PokemonDetail{}
+	return &context
 }
 
 type CliCommand struct {
 	Name string
 	Description string
-	Callback func(config *CliCommandConfig) error
+	Callback func(context *CliCommandContext) error
 }
 
 type Registry map[string]CliCommand
@@ -45,22 +45,22 @@ func GetRegistry() *Registry {
 			},
 			"help": {
 				Name: "help",
-				Description: "Displays a help message",
+				Description: "Display a help message",
 				Callback: commandHelp,
 			},
 			"map": {
 				Name: "map",
-				Description: "Displays map locations 20 at a time",
+				Description: "Display map locations 20 at a time",
 				Callback: commandMapNext,
 			},
 			"mapb": {
 				Name: "mapb",
-				Description: "Displays previous 20 map locations",
+				Description: "Display previous 20 map locations",
 				Callback: commandMapBack,
 			},
 			"explore": {
 				Name: "explore",
-				Description: "Returns a list of all Pokémon in a given location",
+				Description: "Return a list of all Pokémon in a given location",
 				Callback: commandExplore,
 			},
 			"catch": {
@@ -68,18 +68,28 @@ func GetRegistry() *Registry {
 				Description: "Attempt to catch a given Pokémon",
 				Callback: commandCatch,
 			},
+			"inspect": {
+				Name: "inspect",
+				Description: "Inspect a given Pokémon you've already caught",
+				Callback: commandInspect,
+			},
+			"pokedex": {
+				Name: "pokedex",
+				Description: "List the Pokémon you've already caught",
+				Callback: commandPokedex,
+			},
 		}
 	})
 	return registryInstance
 }
 
-func commandExit(config *CliCommandConfig) error {
+func commandExit(context *CliCommandContext) error {
 	fmt.Println("Closing the Pokedex... Goodbye!")
 	os.Exit(0)
 	return nil
 }
 
-func commandHelp(config *CliCommandConfig) error {
+func commandHelp(context *CliCommandContext) error {
 	fmt.Println("Welcome to the Pokedex!")
 	fmt.Println("Usage:")
 	fmt.Println()
@@ -89,21 +99,20 @@ func commandHelp(config *CliCommandConfig) error {
 	return nil
 }
 
-func commandMapNext(config *CliCommandConfig) error {
-	if config.Next == nil {
-		if config.Previous != nil {
-			fmt.Println("You're on the last page")
-			return nil
+func commandMapNext(context *CliCommandContext) error {
+	if context.Next == nil {
+		if context.Previous != nil {
+			return fmt.Errorf("You're on the last page")
 		}
 	}
 
-	data, err := pokeapi.GetLocationAreas(config.Next)
+	data, err := pokeapi.GetLocationAreas(context.Next)
 	if err != nil {
 		return err
 	}
 
-	config.Previous = data.Previous
-	config.Next = data.Next
+	context.Previous = data.Previous
+	context.Next = data.Next
 
 	for _, result := range data.Results {
 		fmt.Println(result.Name)
@@ -112,23 +121,22 @@ func commandMapNext(config *CliCommandConfig) error {
 	return nil
 }
 
-func commandMapBack(config *CliCommandConfig) error {
-	if config.Previous == nil {
-		if config.Next == nil {
-			fmt.Println("Must use 'map' command at least once before 'mapb'")
+func commandMapBack(context *CliCommandContext) error {
+	if context.Previous == nil {
+		if context.Next == nil {
+			return fmt.Errorf("Must use 'map' command at least once before 'mapb'")
 		} else {
-			fmt.Println("You're on the first page")
+			return fmt.Errorf("You're on the first page")
 		}
-		return nil
 	}
 
-	data, err := pokeapi.GetLocationAreas(config.Previous)
+	data, err := pokeapi.GetLocationAreas(context.Previous)
 	if err != nil {
 		return err
 	}
 
-	config.Previous = data.Previous
-	config.Next = data.Next
+	context.Previous = data.Previous
+	context.Next = data.Next
 
 	for _, result := range data.Results {
 		fmt.Println(result.Name)
@@ -137,11 +145,11 @@ func commandMapBack(config *CliCommandConfig) error {
 	return nil
 }
 
-func commandExplore(config *CliCommandConfig) error {
-	if len(config.Arguments) != 1 {
+func commandExplore(context *CliCommandContext) error {
+	if len(context.Arguments) != 1 {
 		return fmt.Errorf("explore command expects 1 argument, the area name")
 	}
-	areaName := config.Arguments[0]
+	areaName := context.Arguments[0]
 
 	detail, err := pokeapi.GetLocationAreaDetail(areaName)
 	if err != nil {
@@ -156,15 +164,14 @@ func commandExplore(config *CliCommandConfig) error {
 	return nil
 }
 
-func commandCatch(config *CliCommandConfig) error {
-	if len(config.Arguments) != 1 {
+func commandCatch(context *CliCommandContext) error {
+	if len(context.Arguments) != 1 {
 		return fmt.Errorf("catch command expects 1 argument, the Pokémon name")
 	}
-	pokemonName := config.Arguments[0]
+	pokemonName := context.Arguments[0]
 
-	if _, ok := config.Caught[pokemonName]; ok {
-		fmt.Printf("%s already caught!\n", pokemonName)
-		return nil
+	if _, ok := context.Caught[pokemonName]; ok {
+		return fmt.Errorf("%s already caught!\n", pokemonName)
 	}
 
 	detail, err := pokeapi.GetPokemonDetail(pokemonName)
@@ -179,6 +186,7 @@ func commandCatch(config *CliCommandConfig) error {
 	const maxExp = 608
 
 	// This is Boots' suggested algorithm, inverting the Pokemon's experience on a normalised scale
+	// See repo history for my original naiive algorithm.
 	scaledDifficulty := 1.0 - (float64(detail.BaseExperience - minExp) / float64(maxExp - minExp))
 
 	// Minimum chance to catch of 20%
@@ -193,12 +201,47 @@ func commandCatch(config *CliCommandConfig) error {
 	if roll <= catchChance {
 		// Caught
 		fmt.Printf("%s was caught!\n", pokemonName)
+		fmt.Println("You may now inspect it with the inspect command.")
 
-		config.Caught[pokemonName] = detail
+		context.Caught[pokemonName] = detail
 	} else {
 		// Escaped
 		fmt.Printf("%s escaped!\n", pokemonName)
 	}
 
+	return nil
+}
+
+func commandInspect(context *CliCommandContext) error {
+	if len(context.Arguments) != 1 {
+		return fmt.Errorf("inspect command expects 1 argument, the Pokémon name")
+	}
+	pokemonName := context.Arguments[0]
+
+	detail, ok := context.Caught[pokemonName]
+	if !ok {
+		return fmt.Errorf("you have not caught that pokemon")
+	}
+
+	fmt.Printf("Name: %v\n", detail.Name)
+	fmt.Printf("Height: %v\n", detail.Height)
+	fmt.Printf("Weight: %v\n", detail.Weight)
+	fmt.Println("Stats:")
+	for _, stat := range detail.Stats {
+		fmt.Printf("  - %s: %v\n", stat.Stat.Name, stat.BaseStat)
+	}
+	fmt.Println("Types:")
+	for _, typeInfo := range detail.Types {
+		fmt.Printf("  - %s\n", typeInfo.Type.Name)
+	}
+
+	return nil
+}
+
+func commandPokedex(context *CliCommandContext) error {
+	fmt.Println("Your Pokedex:")
+	for name, _ := range context.Caught {
+		fmt.Printf(" - %s\n", name)
+	}
 	return nil
 }
