@@ -102,7 +102,8 @@ func commandHelp(context *CliCommandContext) error {
 func commandMapNext(context *CliCommandContext) error {
 	if context.Next == nil {
 		if context.Previous != nil {
-			return fmt.Errorf("You're on the last page")
+			fmt.Println("You're on the last page")
+			return nil
 		}
 	}
 
@@ -124,10 +125,11 @@ func commandMapNext(context *CliCommandContext) error {
 func commandMapBack(context *CliCommandContext) error {
 	if context.Previous == nil {
 		if context.Next == nil {
-			return fmt.Errorf("Must use 'map' command at least once before 'mapb'")
+			fmt.Println("Must use 'map' command at least once before 'mapb'")
 		} else {
-			return fmt.Errorf("You're on the first page")
+			fmt.Println("You're on the first page")
 		}
+		return nil
 	}
 
 	data, err := pokeapi.GetLocationAreas(context.Previous)
@@ -171,7 +173,8 @@ func commandCatch(context *CliCommandContext) error {
 	pokemonName := context.Arguments[0]
 
 	if _, ok := context.Caught[pokemonName]; ok {
-		return fmt.Errorf("%s already caught!\n", pokemonName)
+		fmt.Printf("%s already caught!\n", pokemonName)
+		return nil
 	}
 
 	detail, err := pokeapi.GetPokemonDetail(pokemonName)
@@ -240,7 +243,7 @@ func commandInspect(context *CliCommandContext) error {
 
 func commandPokedex(context *CliCommandContext) error {
 	fmt.Println("Your Pokedex:")
-	for name, _ := range context.Caught {
+	for name := range context.Caught {
 		fmt.Printf(" - %s\n", name)
 	}
 	return nil
